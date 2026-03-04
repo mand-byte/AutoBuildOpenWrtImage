@@ -75,16 +75,20 @@ jobs:
         cd openwrt
         ./scripts/feeds install -a
         
-    - name: Add TurboACC (without Shortcut-FE)
-      run: |
-        cd openwrt
-        curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh
-        chmod +x add_turboacc.sh
-        ./add_turboacc.sh --no-sfe
-    
     - name: Copy custom .config
       run: |
         cp ../.config .config
+      working-directory: openwrt
+      
+    - name: Add TurboACC (without Shortcut-FE)
+      run: |
+        curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh
+        chmod +x add_turboacc.sh
+        ./add_turboacc.sh --no-sfe
+      working-directory: openwrt
+      
+    - name: make defconfig
+      run: |
         make defconfig
       working-directory: openwrt
 
