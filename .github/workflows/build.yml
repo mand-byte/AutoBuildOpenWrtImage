@@ -95,6 +95,13 @@ jobs:
         make defconfig
       working-directory: openwrt
 
+    - name: Verify HomeProxy selection
+      run: |
+        grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y$' .config
+        grep -q '^CONFIG_PACKAGE_sing-box=y$' .config
+        grep -q '^CONFIG_PACKAGE_firewall4=y$' .config
+      working-directory: openwrt
+
     - name: Download dependencies
       run: |
         cd openwrt
@@ -105,6 +112,12 @@ jobs:
         cd openwrt
         make -j$(nproc) || make -j1 V=s
 
+    - name: Verify HomeProxy firmware package
+      run: |
+        grep -q '^luci-app-homeproxy ' bin/targets/x86/64/*.manifest
+        grep -q '^sing-box ' bin/targets/x86/64/*.manifest
+      working-directory: openwrt
+
     - name: Upload firmware artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -112,4 +125,3 @@ jobs:
         path: |
           openwrt/bin/targets/x86/64/*
           !openwrt/bin/targets/x86/64/*.buildinfo
-          !openwrt/bin/targets/x86/64/*.manifest
