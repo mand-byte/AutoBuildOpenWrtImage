@@ -81,11 +81,12 @@ jobs:
         cp ../.config .config
       working-directory: openwrt
       
-    - name: Add TurboACC (without Shortcut-FE)
+    - name: Add TurboACC without Shortcut-FE patch
       run: |
-        curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh
+        curl -sSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh -o add_turboacc.sh
         chmod +x add_turboacc.sh
-        ./add_turboacc.sh --no-sfe
+        ./add_turboacc.sh
+        find target/linux/generic -path '*/953-net-patch-linux-kernel-to-support-shortcut-fe.patch' -delete
       working-directory: openwrt
       
     - name: make defconfig
