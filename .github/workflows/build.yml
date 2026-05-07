@@ -34,8 +34,6 @@ jobs:
           subversion quilt xsltproc gperf gengetopt liberror-perl \
           libgmp3-dev libmpc-dev libmpfr-dev texinfo patch curl \
           autoconf automake libtool pkg-config rsync kmod
-        sudo ln -sf "$(command -v automake)" /usr/local/bin/automake-1.17
-        sudo ln -sf "$(command -v aclocal)" /usr/local/bin/aclocal-1.17
 
     - name: Checkout OpenWrt source
       run: |
@@ -89,6 +87,7 @@ jobs:
         chmod +x add_turboacc.sh
         ./add_turboacc.sh
         find target/linux/generic -path '*/953-net-patch-linux-kernel-to-support-shortcut-fe.patch' -delete
+        grep -q '^PKG_FIXUP:=autoreconf' package/libs/libnftnl/Makefile || sed -i '/^PKG_MAINTAINER:=/a PKG_FIXUP:=autoreconf' package/libs/libnftnl/Makefile
       working-directory: openwrt
       
     - name: make defconfig
