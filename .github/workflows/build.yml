@@ -6,9 +6,9 @@ on:
   workflow_dispatch: # 允许手动触发
     inputs:
       openwrt_version:
-        description: 'OpenWrt 版本号 (例如 24.10.5)'
+        description: 'OpenWrt 版本号 (例如 25.12.3)'
         required: true
-        default: '24.10.5'
+        default: '25.12.3'
         type: string
 
 jobs:
@@ -60,7 +60,8 @@ jobs:
         sed -i "s|https://git.openwrt.org/project/luci.git.*|https://github.com/openwrt/luci.git;${FEEDS_BRANCH}|" feeds.conf.default
         sed -i "s|https://git.openwrt.org/feed/routing.git.*|https://github.com/openwrt/routing.git;${FEEDS_BRANCH}|" feeds.conf.default
         sed -i "s|https://git.openwrt.org/feed/telephony.git.*|https://github.com/openwrt/telephony.git;${FEEDS_BRANCH}|" feeds.conf.default
-        
+        grep -q '^src-git homeproxy ' feeds.conf.default || echo "src-git homeproxy https://github.com/immortalwrt/homeproxy.git;master" >> feeds.conf.default
+
         # 输出查看结果
         echo "Updated feeds.conf.default:"
         cat feeds.conf.default
