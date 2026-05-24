@@ -87,6 +87,16 @@ jobs:
 
         echo "HomeProxy package Makefile:"
         find -L package -maxdepth 6 -path '*homeproxy*Makefile' -print
+
+    - name: Add HomeProxy to x86-64 image packages
+      run: |
+        if ! grep -q 'luci-app-homeproxy' target/linux/x86/image/64.mk; then
+          sed -i '/^  GRUB2_VARIANT := generic$/i\  DEVICE_PACKAGES += luci-app-homeproxy sing-box firewall4' target/linux/x86/image/64.mk
+        fi
+
+        echo "x86-64 generic image package block:"
+        sed -n '/define Device\/generic/,/endef/p' target/linux/x86/image/64.mk
+      working-directory: openwrt
         
     - name: Copy custom .config
       run: |
@@ -170,8 +180,46 @@ jobs:
 
     - name: Verify HomeProxy firmware package
       run: |
-        grep -q '^luci-app-homeproxy ' bin/targets/x86/64/*.manifest
-        grep -q '^sing-box ' bin/targets/x86/64/*.manifest
+        homeproxy_ok=0
+        sing_box_ok=0
+
+        if grep -hE '^luci-app-homeproxy[[:space:]-]' bin/targets/x86/64/*.manifest; then
+          homeproxy_ok=1
+        elif find build_dir \( -path '*/root-*/etc/init.d/homeproxy' -o -path '*/target-*/etc/init.d/homeproxy' \) -print -quit | grep -q .; then
+          echo "luci-app-homeproxy files found in generated rootfs"
+          homeproxy_ok=1
+        else
+          echo "::error::luci-app-homeproxy is missing from firmware manifest and generated rootfs"
+        fi
+
+        if grep -hE '^sing-box[[:space:]-]' bin/targets/x86/64/*.manifest; then
+          sing_box_ok=1
+        elif find build_dir \( -path '*/root-*/usr/bin/sing-box' -o -path '*/target-*/usr/bin/sing-box' \) -print -quit | grep -q .; then
+          echo "sing-box binary found in generated rootfs"
+          sing_box_ok=1
+        else
+          echo "::error::sing-box is missing from firmware manifest and generated rootfs"
+        fi
+
+        if [ "${homeproxy_ok}" -ne 1 ] || [ "${sing_box_ok}" -ne 1 ]; then
+          echo "::group::Manifest package matches"
+          grep -hE 'homeproxy|sing-box|firewall4|luci-base|rpcd' bin/targets/x86/64/*.manifest || true
+          echo "::endgroup::"
+
+          echo "::group::Generated HomeProxy and sing-box packages"
+          find bin packages build_dir -iname '*homeproxy*' -o -iname '*sing-box*' | sort || true
+          echo "::endgroup::"
+
+          echo "::group::Final .config entries"
+          grep -nE 'CONFIG_PACKAGE_(luci-app-homeproxy|luci-i18n-homeproxy|sing-box|firewall4)' .config || true
+          echo "::endgroup::"
+
+          echo "::group::Generated rootfs matches"
+          find build_dir \( -path '*/root-*/etc/init.d/homeproxy' -o -path '*/target-*/etc/init.d/homeproxy' -o -path '*/root-*/usr/bin/sing-box' -o -path '*/target-*/usr/bin/sing-box' -o -path '*/root-*/etc/config/homeproxy' -o -path '*/target-*/etc/config/homeproxy' \) -print || true
+          echo "::endgroup::"
+
+          exit 1
+        fi
       working-directory: openwrt
 
     - name: Upload firmware artifacts
