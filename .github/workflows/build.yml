@@ -14,6 +14,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      OPENWRT_VERSION: ${{ github.event.inputs.openwrt_version || '25.12.3' }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -39,17 +41,17 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt.git
         cd openwrt
-        git checkout v${{ inputs.openwrt_version }}
+        git checkout "v${OPENWRT_VERSION}"
 
     - name: Replace feeds.conf.default with GitHub mirrors (dynamic branch)
       run: |
         cd openwrt
         
         # 计算 feeds 分支名，例如 24.10.5 → openwrt-24.10
-        MAJOR_MINOR=$(echo ${{ inputs.openwrt_version }} | cut -d. -f1-2)
+        MAJOR_MINOR=$(echo "${OPENWRT_VERSION}" | cut -d. -f1-2)
         FEEDS_BRANCH="openwrt-${MAJOR_MINOR}"
         
-        echo "Using OpenWrt version: ${{ inputs.openwrt_version }}"
+        echo "Using OpenWrt version: ${OPENWRT_VERSION}"
         echo "Feeds branch: ${FEEDS_BRANCH}"
         
         # 备份原文件
@@ -75,6 +77,8 @@ jobs:
       run: |
         cd openwrt
         ./scripts/feeds install -a
+        ./scripts/feeds install -f -p packages sing-box
+        ./scripts/feeds install -f -p homeproxy luci-app-homeproxy
         
     - name: Copy custom .config
       run: |
@@ -89,6 +93,24 @@ jobs:
         find target/linux/generic -path '*/953-net-patch-linux-kernel-to-support-shortcut-fe.patch' -delete
         grep -q '^PKG_FIXUP:=autoreconf' package/libs/libnftnl/Makefile || sed -i '/^PKG_MAINTAINER:=/a PKG_FIXUP:=autoreconf' package/libs/libnftnl/Makefile
       working-directory: openwrt
+
+    - name: Reapply required package selections
+      run: |
+        set_config_y() {
+          local symbol="$1"
+          sed -i "/^${symbol}=/d;/^# ${symbol} is not set$/d" .config
+          echo "${symbol}=y" >> .config
+        }
+
+        set_config_y CONFIG_PACKAGE_firewall4
+        set_config_y CONFIG_PACKAGE_kmod-inet-diag
+        set_config_y CONFIG_PACKAGE_kmod-nft-tproxy
+        set_config_y CONFIG_PACKAGE_kmod-tun
+        set_config_y CONFIG_PACKAGE_sing-box
+        set_config_y CONFIG_PACKAGE_ucode-mod-digest
+        set_config_y CONFIG_PACKAGE_luci-app-homeproxy
+        set_config_y CONFIG_PACKAGE_luci-i18n-homeproxy-zh-cn
+      working-directory: openwrt
       
     - name: make defconfig
       run: |
@@ -97,9 +119,36 @@ jobs:
 
     - name: Verify HomeProxy selection
       run: |
-        grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y$' .config
-        grep -q '^CONFIG_PACKAGE_sing-box=y$' .config
-        grep -q '^CONFIG_PACKAGE_firewall4=y$' .config
+        missing=0
+        for symbol in \
+          CONFIG_PACKAGE_luci-app-homeproxy \
+          CONFIG_PACKAGE_sing-box \
+          CONFIG_PACKAGE_firewall4
+        do
+          if grep -qx "${symbol}=y" .config; then
+            echo "${symbol}=y"
+          else
+            echo "::error::${symbol}=y is missing after make defconfig"
+            missing=1
+          fi
+        done
+
+        if [ "${missing}" -ne 0 ]; then
+          echo "::group::Related .config entries"
+          grep -nE 'CONFIG_PACKAGE_(luci-app-homeproxy|luci-i18n-homeproxy|sing-box|firewall4|kmod-inet-diag|kmod-nft-tproxy|kmod-tun|ucode-mod-digest)' .config || true
+          echo "::endgroup::"
+
+          echo "::group::HomeProxy and sing-box package files"
+          find package feeds -maxdepth 6 \( -iname '*homeproxy*' -o -iname 'sing-box' \) -print -exec ls -ld {} \; || true
+          echo "::endgroup::"
+
+          echo "::group::HomeProxy dependencies"
+          sed -n '1,80p' feeds/homeproxy/Makefile 2>/dev/null || true
+          find package -maxdepth 7 -path '*homeproxy*Makefile' -print -exec sed -n '1,80p' {} \; || true
+          echo "::endgroup::"
+
+          exit 1
+        fi
       working-directory: openwrt
 
     - name: Download dependencies
