@@ -78,7 +78,15 @@ jobs:
         cd openwrt
         ./scripts/feeds install -a
         ./scripts/feeds install -f -p packages sing-box
-        ./scripts/feeds install -f -p homeproxy luci-app-homeproxy
+        test -f feeds/homeproxy/Makefile
+
+        if ! find -L package -maxdepth 6 -path '*homeproxy*Makefile' -exec grep -q '^PKG_NAME:=luci-app-homeproxy' {} \; -print | grep -q .; then
+          mkdir -p package/feeds/homeproxy
+          ln -sfn ../../../feeds/homeproxy package/feeds/homeproxy/luci-app-homeproxy
+        fi
+
+        echo "HomeProxy package Makefile:"
+        find -L package -maxdepth 6 -path '*homeproxy*Makefile' -print
         
     - name: Copy custom .config
       run: |
@@ -139,12 +147,11 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::HomeProxy and sing-box package files"
-          find package feeds -maxdepth 6 \( -iname '*homeproxy*' -o -iname 'sing-box' \) -print -exec ls -ld {} \; || true
+          find -L package feeds -maxdepth 6 \( -iname '*homeproxy*' -o -iname 'sing-box' \) -print -exec ls -ld {} \; || true
           echo "::endgroup::"
 
           echo "::group::HomeProxy dependencies"
-          sed -n '1,80p' feeds/homeproxy/Makefile 2>/dev/null || true
-          find package -maxdepth 7 -path '*homeproxy*Makefile' -print -exec sed -n '1,80p' {} \; || true
+          find -L feeds/homeproxy package -maxdepth 7 -path '*homeproxy*Makefile' -print -exec sed -n '1,80p' {} \; || true
           echo "::endgroup::"
 
           exit 1
